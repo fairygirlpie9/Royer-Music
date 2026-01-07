@@ -17,56 +17,56 @@ const formatTime = (seconds: number) => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 };
 
+const formatTitle = (title: string) => {
+    return title.replace(/_/g, ' ');
+};
+
 const Display: React.FC<DisplayProps> = ({ currentTrack, currentTime, duration, analyser, isPlaying }) => {
   return (
-    <div className="w-full h-56 bg-black flex flex-col font-['Space_Mono'] relative">
-      
-      {/* Track Marquee Area */}
-      <div className="h-16 bg-yellow-400 border-b-4 border-black flex items-center overflow-hidden whitespace-nowrap px-2 relative">
-          <div className="absolute inset-0 bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAIklEQVQIW2NkQAKrVq36zwjjgzhhZWGMYAEYB8RmROaABADeOQ8CXl/xfgAAAABJRU5ErkJggg==')] opacity-10 pointer-events-none"></div>
-          {currentTrack ? (
-             <div className="text-4xl font-bold text-black uppercase animate-marquee inline-block w-full">
-               {currentTrack.artist} /// {currentTrack.title} /// {currentTrack.artist} /// {currentTrack.title}
-             </div>
-          ) : (
-            <div className="text-4xl font-bold text-black uppercase">INSERT_DISK</div>
-          )}
-      </div>
+    <div className="w-full h-full relative font-['Space_Mono'] text-white">
+        {/* Background Visualizer */}
+        <div className="absolute inset-0 z-0">
+             <Visualizer analyser={analyser} isPlaying={isPlaying} />
+        </div>
 
-      <div className="flex-1 flex relative">
-          {/* Time Display */}
-          <div className="w-32 bg-white border-r-4 border-black flex flex-col justify-center items-center p-2 z-10">
-              <span className="text-xs font-bold bg-black text-white px-1 mb-1">ELAPSED</span>
-              <div className="text-3xl font-bold tracking-tighter">
-                {formatTime(currentTime)}
-              </div>
-              <div className="w-full h-2 bg-neutral-200 mt-2 border-2 border-black overflow-hidden">
-                   <div 
-                      className="h-full bg-pink-500" 
-                      style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
-                   ></div>
-              </div>
-          </div>
+        {/* Scanline Overlay */}
+        <div className="absolute inset-0 z-10 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] bg-[length:100%_4px,3px_100%]"></div>
+        
+        {/* Content Overlay */}
+        <div className="absolute inset-0 z-20 flex flex-col p-4">
+            
+            {/* Middle: Track Info */}
+            <div className="flex flex-col items-center justify-center text-center mix-blend-difference flex-1">
+                 {currentTrack ? (
+                     <>
+                        <h2 className="text-2xl md:text-4xl font-bold uppercase tracking-tight text-white drop-shadow-[2px_2px_0_rgba(0,0,0,1)]">
+                            {formatTitle(currentTrack.title)}
+                        </h2>
+                        <p className="text-sm md:text-lg text-pink-400 uppercase font-bold bg-black/50 px-2 mt-1">
+                            {currentTrack.artist}
+                        </p>
+                     </>
+                 ) : (
+                     <span className="text-xl text-neutral-500 animate-pulse">INSERT DISK</span>
+                 )}
+            </div>
 
-          {/* Visualizer Area */}
-          <div className="flex-1 bg-black relative">
-              <Visualizer analyser={analyser} isPlaying={isPlaying} />
-              
-              {/* Status Overlay */}
-              <div className="absolute top-2 right-2 flex flex-col gap-2">
-                  {isPlaying && (
-                      <div className="bg-green-500 border-2 border-black text-black text-xs font-bold px-2 py-0.5 animate-pulse">
-                          PLAYING
-                      </div>
-                  )}
-                  {currentTrack?.url.startsWith('blob') && (
-                      <div className="bg-blue-400 border-2 border-black text-white text-xs font-bold px-2 py-0.5">
-                          LOCAL
-                      </div>
-                  )}
-              </div>
-          </div>
-      </div>
+            {/* Bottom: Time */}
+            <div className="flex flex-col gap-1 w-full">
+                <div className="flex justify-between text-xs font-bold font-mono">
+                    <span>{formatTime(currentTime)}</span>
+                    <span>{formatTime(duration)}</span>
+                </div>
+                {/* Progress Bar */}
+                <div className="w-full h-2 bg-neutral-800 border border-neutral-600">
+                    <div 
+                        className="h-full bg-pink-500" 
+                        style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
+                    ></div>
+                </div>
+            </div>
+
+        </div>
     </div>
   );
 };

@@ -4,7 +4,7 @@ import { Track } from './types';
 import Knob from './components/Knob';
 import Display from './components/Display';
 import Playlist from './components/Playlist';
-import { Play, Pause, SkipBack, SkipForward, Upload, Power, Disc, Music, Zap } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Upload, Power, Zap, RotateCcw } from 'lucide-react';
 
 const App: React.FC = () => {
   // State
@@ -65,6 +65,7 @@ const App: React.FC = () => {
     const handlePause = () => setIsPlaying(false);
     const handleEnded = () => {
       setIsPlaying(false);
+      // Auto-advance
       if (currentTrackIndex < tracks.length - 1) {
           playTrack(currentTrackIndex + 1);
       }
@@ -74,13 +75,22 @@ const App: React.FC = () => {
       setDuration(audio.duration || 0);
     };
 
+    // Ensure playback rate is maintained if the browser resets it
+    const handleRateChange = () => {
+       if (Math.abs(audio.playbackRate - playbackRate) > 0.01) {
+           // If the audio element drifted from our state (e.g. on new source load), reset it
+           audio.playbackRate = playbackRate;
+       }
+    }
+
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('loadedmetadata', handleTimeUpdate);
+    audio.addEventListener('ratechange', handleRateChange);
 
-    // Apply initial playback rate
+    // Initial sync
     audio.playbackRate = playbackRate;
 
     return () => {
@@ -89,8 +99,9 @@ const App: React.FC = () => {
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('loadedmetadata', handleTimeUpdate);
+      audio.removeEventListener('ratechange', handleRateChange);
     };
-  }, [tracks, currentTrackIndex]);
+  }, [tracks, currentTrackIndex, playbackRate]);
 
   // Controls
   const togglePlay = async () => {
@@ -122,17 +133,21 @@ const App: React.FC = () => {
     setCurrentTrackIndex(index);
   };
 
+  // Handle Track Changes
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     
     const track = tracks[currentTrackIndex];
     if (track) {
-        // Only change src if it's different to avoid reloading same track
         const currentSrc = audio.getAttribute('src');
         if (currentSrc !== track.url) {
             audio.src = track.url;
             audio.load();
+            
+            // CRITICAL: Re-apply playback rate immediately after loading new source
+            audio.playbackRate = playbackRate;
+            
             if (isPlaying && poweredOn) {
                 audio.play().catch(e => console.log("Auto-play prevented", e));
             }
@@ -141,7 +156,7 @@ const App: React.FC = () => {
         audio.removeAttribute('src');
         audio.load();
     }
-  }, [currentTrackIndex, tracks, poweredOn]);
+  }, [currentTrackIndex, tracks, poweredOn]); // We read playbackRate from closure or state if needed, but specifically setting it on load is key.
 
   const handleVolumeChange = (newVol: number) => {
     setVolume(newVol);
@@ -152,17 +167,18 @@ const App: React.FC = () => {
     }
   };
 
-  // Map 0-100 knob value to 0.8x - 1.2x speed
   const handleTuneChange = (val: number) => {
-      // center is 50. 
-      // 0 -> 0.8
-      // 50 -> 1.0
-      // 100 -> 1.2
+      // Map 0-100 to 0.8x - 1.2x
       const rate = 0.8 + ((val / 100) * 0.4);
       setPlaybackRate(rate);
       if (audioRef.current) {
           audioRef.current.playbackRate = rate;
       }
+  };
+
+  const handleResetControls = () => {
+      handleVolumeChange(70);
+      handleTuneChange(50); // Maps to 1.0 playback rate
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -171,7 +187,8 @@ const App: React.FC = () => {
 
     const newTracks: Track[] = Array.from(files).map((file: File) => ({
       id: crypto.randomUUID(),
-      title: file.name.replace(/\.[^/.]+$/, "").toUpperCase(),
+      // Replace underscores with spaces and remove extension
+      title: file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ").toUpperCase(),
       artist: 'UPLOAD', 
       url: URL.createObjectURL(file),
       file: file
@@ -210,114 +227,120 @@ const App: React.FC = () => {
   };
 
   const btnClass = `
-    h-14 bg-white border-2 border-black neo-shadow-sm 
+    h-16 bg-white border-4 border-black neo-shadow-sm 
     flex items-center justify-center 
     text-black hover:bg-yellow-300 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none 
-    transition-all active:bg-black active:text-white select-none
+    transition-all active:bg-black active:text-white select-none w-full
   `;
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 lg:p-8 bg-pink-400 pattern-dots">
+    <div className="min-h-screen flex items-center justify-center p-2 sm:p-4 bg-pink-400 pattern-dots font-['Space_Mono']">
       <audio ref={audioRef} crossOrigin="anonymous" preload="metadata" />
 
-      {/* Main Container */}
-      <div className={`relative w-full max-w-5xl bg-yellow-100 border-4 border-black neo-shadow-lg p-2 transition-all duration-300 ${poweredOn ? '' : 'grayscale brightness-90'}`}>
+      {/* Main Container - The "Deck" */}
+      <div className={`relative w-full max-w-4xl bg-yellow-100 border-4 border-black neo-shadow-lg transition-all duration-300 ${poweredOn ? '' : 'grayscale brightness-90'}`}>
         
         {/* Header Bar */}
-        <div className="bg-black text-white p-4 mb-4 flex justify-between items-center border-b-4 border-black">
+        <div className="bg-black text-white p-3 flex justify-between items-center border-b-4 border-black">
              <div className="flex items-center gap-3">
                 <Zap className={`${isPlaying ? 'text-yellow-400 fill-yellow-400' : 'text-neutral-500'}`} />
-                <h1 className="text-4xl font-['Archivo_Black'] uppercase tracking-tighter leading-none">
-                    AUDIO<span className="text-pink-500">DECK</span>
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-['Archivo_Black'] uppercase tracking-tighter leading-none">
+                    ROYER'S<span className="text-pink-500">MUSIC</span>
                 </h1>
              </div>
              <div className="flex items-center gap-4">
-                 <span className="hidden md:inline font-bold bg-white text-black px-2 py-1 transform -rotate-2 border-2 border-black">
+                 <span className="hidden sm:inline font-bold bg-white text-black px-2 py-1 transform -rotate-2 border-2 border-black text-sm">
                     V.9000
                  </span>
                  <button 
                     onClick={togglePower}
-                    className={`w-12 h-12 border-4 border-white flex items-center justify-center transition-colors ${poweredOn ? 'bg-green-500 text-black animate-pulse' : 'bg-red-500 text-white'}`}
+                    className={`w-10 h-10 border-2 border-white flex items-center justify-center transition-colors ${poweredOn ? 'bg-green-500 text-black shadow-[0_0_10px_#4ade80]' : 'bg-red-500 text-white'}`}
                     title="Power"
                  >
-                    <Power size={24} strokeWidth={3} />
+                    <Power size={20} strokeWidth={3} />
                  </button>
              </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row gap-4 h-full">
-            
-            {/* Left Column: Visuals & Transport */}
-            <div className="flex-1 flex flex-col gap-4">
+        {/* Screen Area (Visualizer + Info) */}
+        <div className="bg-white border-b-4 border-black p-2 sm:p-4 relative">
+             {/* Decorative Screws */}
+             <div className="absolute top-2 left-2 w-2 h-2 bg-black rounded-full"></div>
+             <div className="absolute bottom-2 left-2 w-2 h-2 bg-black rounded-full"></div>
+             
+             {/* The Black Screen */}
+             <div className="w-full bg-black border-4 border-black h-40 sm:h-56 md:h-64 relative overflow-hidden">
+                <Display 
+                    currentTrack={tracks[currentTrackIndex] || null}
+                    currentTime={currentTime}
+                    duration={duration}
+                    analyser={analyserRef.current}
+                    isPlaying={isPlaying}
+                />
+             </div>
+        </div>
+
+        {/* Transport Bar */}
+        <div className="bg-[#C084FC] border-b-4 border-black p-4">
+            <div className="flex gap-4 justify-between">
+                <button className={`${btnClass} flex-1`} onClick={() => playTrack(currentTrackIndex - 1)}>
+                    <SkipBack size={24} className="sm:w-8 sm:h-8" strokeWidth={2.5} />
+                </button>
                 
-                {/* Display Unit */}
-                <div className="bg-white border-4 border-black p-4 neo-shadow relative overflow-hidden flex flex-col">
-                    <Display 
-                        currentTrack={tracks[currentTrackIndex] || null}
-                        currentTime={currentTime}
-                        duration={duration}
-                        analyser={analyserRef.current}
-                        isPlaying={isPlaying}
-                    />
-                    {/* Decorative bolts */}
-                    <div className="absolute top-2 left-2 w-3 h-3 bg-black rounded-full"></div>
-                    <div className="absolute top-2 right-2 w-3 h-3 bg-black rounded-full"></div>
-                    <div className="absolute bottom-2 left-2 w-3 h-3 bg-black rounded-full"></div>
-                    <div className="absolute bottom-2 right-2 w-3 h-3 bg-black rounded-full"></div>
-                </div>
+                <button className={`${btnClass} flex-[2]`} onClick={togglePlay}>
+                    {isPlaying ? <Pause size={24} className="sm:w-8 sm:h-8" strokeWidth={2.5} fill="black" /> : <Play size={24} className="sm:w-8 sm:h-8" strokeWidth={2.5} fill="black" />}
+                </button>
+                
+                <button className={`${btnClass} flex-1`} onClick={() => playTrack(currentTrackIndex + 1)}>
+                    <SkipForward size={24} className="sm:w-8 sm:h-8" strokeWidth={2.5} />
+                </button>
 
-                {/* Transport Controls */}
-                <div className="bg-purple-400 border-4 border-black p-6 neo-shadow">
-                    <div className="grid grid-cols-5 gap-4">
-                        <button className={`${btnClass} col-span-1`} onClick={() => playTrack(currentTrackIndex - 1)}>
-                            <SkipBack size={28} strokeWidth={3} />
-                        </button>
-                        
-                        <button className={`${btnClass} col-span-2 ${isPlaying ? 'bg-yellow-300' : ''}`} onClick={togglePlay}>
-                            {isPlaying ? <Pause size={32} strokeWidth={3} fill="black" /> : <Play size={32} strokeWidth={3} fill="black" />}
-                        </button>
-                        
-                        <button className={`${btnClass} col-span-1`} onClick={() => playTrack(currentTrackIndex + 1)}>
-                            <SkipForward size={28} strokeWidth={3} />
-                        </button>
+                <label className={`${btnClass} flex-1 cursor-pointer bg-white`}>
+                     <input type="file" multiple accept="audio/*" onChange={handleFileUpload} className="hidden" />
+                     <Upload size={24} className="sm:w-8 sm:h-8" strokeWidth={2.5} />
+                </label>
+            </div>
+        </div>
 
-                        <label className={`${btnClass} col-span-1 cursor-pointer bg-blue-400 text-white hover:bg-blue-500`}>
-                             <input type="file" multiple accept="audio/*" onChange={handleFileUpload} className="hidden" />
-                             <Upload size={24} strokeWidth={3} />
-                        </label>
-                    </div>
-                </div>
+        {/* Lower Control Section (Knobs & Playlist) */}
+        <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-6 bg-yellow-100">
+            {/* Knobs Area */}
+            <div className="relative md:col-span-1 bg-orange-300 border-4 border-black p-4 neo-shadow flex flex-col items-center justify-center gap-4">
+                {/* Reset Button - Moved to absolute position top right */}
+                <button 
+                    onClick={handleResetControls}
+                    className="absolute top-2 right-2 p-1.5 bg-white border-2 border-black hover:bg-red-400 hover:text-white transition-all neo-shadow-sm active:translate-y-[1px] active:shadow-none"
+                    title="Reset Controls"
+                >
+                    <RotateCcw size={14} />
+                </button>
 
+                <Knob label="GAIN" value={volume} onChange={handleVolumeChange} size="md" />
+                <Knob label="TUNE" value={(playbackRate - 0.8) / 0.4 * 100} onChange={handleTuneChange} size="md" />
             </div>
 
-            {/* Right Column: Playlist & Knobs */}
-            <div className="w-full lg:w-96 flex flex-col gap-4">
-                
-                {/* Knobs Panel */}
-                <div className="bg-orange-300 border-4 border-black p-6 neo-shadow flex justify-around items-end pb-8">
-                     <Knob label="GAIN" value={volume} onChange={handleVolumeChange} size="lg" />
-                     {/* Map 0-100 range to internal playback rate logic */}
-                     <Knob label="TUNE" value={(playbackRate - 0.8) / 0.4 * 100} onChange={handleTuneChange} size="md" />
+            {/* Playlist Area */}
+            <div className="md:col-span-2 bg-white border-4 border-black p-0 neo-shadow h-56 md:h-64 flex flex-col">
+                <div className="bg-black text-white p-2 font-bold text-center border-b-4 border-black font-['Archivo_Black'] tracking-widest text-lg">
+                    TRACK LIST
                 </div>
-
-                {/* Playlist */}
-                <div className="flex-1 bg-white border-4 border-black p-0 neo-shadow min-h-[300px]">
-                     <div className="bg-black text-white p-2 font-bold text-center border-b-4 border-black font-['Archivo_Black'] tracking-widest text-xl">
-                        TRACK_LIST
-                     </div>
-                     <Playlist 
+                <div className="flex-1 overflow-hidden">
+                    <Playlist 
                         tracks={tracks} 
                         currentTrackId={tracks[currentTrackIndex]?.id}
                         isPlaying={isPlaying}
                         onSelect={(t, i) => playTrack(i)}
                         onRemove={handleRemoveTrack}
-                     />
+                    />
                 </div>
             </div>
         </div>
-        
-        <div className="mt-4 text-center font-bold text-xs uppercase tracking-[0.5em] opacity-50">
-            Design by RetroFi Corp.
+
+        {/* Footer */}
+        <div className="pb-4 text-center font-bold text-[10px] uppercase tracking-[0.4em] opacity-60">
+             <a href="mailto:danielle.royer@hotmail.com" className="hover:opacity-100 transition-opacity">
+                DESIGNED BY D ROYER
+             </a>
         </div>
 
       </div>

@@ -10,6 +10,10 @@ interface PlaylistProps {
   onRemove: (index: number) => void;
 }
 
+const formatTitle = (title: string) => {
+    return title.replace(/_/g, ' ');
+};
+
 const Playlist: React.FC<PlaylistProps> = ({ tracks, currentTrackId, isPlaying, onSelect, onRemove }) => {
   return (
     <div className="bg-white h-72 overflow-y-auto p-4">
@@ -39,7 +43,7 @@ const Playlist: React.FC<PlaylistProps> = ({ tracks, currentTrackId, isPlaying, 
                    </div>
                    <div className="flex flex-col min-w-0">
                       <span className={`text-sm font-bold uppercase truncate ${isActive ? 'text-white' : 'text-black'}`}>
-                        {track.title}
+                        {formatTitle(track.title)}
                       </span>
                    </div>
                 </div>
