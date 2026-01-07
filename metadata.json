@@ -1,0 +1,5 @@
+{
+  "name": "RetroFi",
+  "description": "A high-fidelity audio player with a nostalgic skeuomorphic design. Upload your own tracks and enjoy the analog aesthetic with a working visualizer.",
+  "requestFramePermissions": []
+}
