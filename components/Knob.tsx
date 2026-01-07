@@ -22,7 +22,6 @@ const Knob: React.FC<KnobProps> = ({
   const [startValue, setStartValue] = useState(0);
   const knobRef = useRef<HTMLDivElement>(null);
 
-  // Calculate rotation based on value (mapping min-max to -135deg to +135deg)
   const percentage = (value - min) / (max - min);
   const rotation = -135 + (percentage * 270);
 
@@ -35,14 +34,11 @@ const Knob: React.FC<KnobProps> = ({
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
-
-    const deltaY = startY - e.clientY; // Drag up to increase
+    const deltaY = startY - e.clientY;
     const range = max - min;
-    const sensitivity = 0.5; // Pixels per unit
-    
+    const sensitivity = 0.8; 
     let newValue = startValue + (deltaY * sensitivity * (range / 100));
     newValue = Math.min(Math.max(newValue, min), max);
-    
     onChange(newValue);
   }, [isDragging, startY, startValue, min, max, onChange]);
 
@@ -65,37 +61,33 @@ const Knob: React.FC<KnobProps> = ({
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  const sizeClasses = {
-    sm: 'w-12 h-12',
-    md: 'w-20 h-20',
-    lg: 'w-32 h-32'
+  const sizeConfig = {
+    sm: { size: 'w-16 h-16', indicator: 'h-6' },
+    md: { size: 'w-20 h-20', indicator: 'h-8' },
+    lg: { size: 'w-28 h-28', indicator: 'h-10' }
   };
 
-  const dotSize = {
-    sm: 'w-1 h-1',
-    md: 'w-2 h-2',
-    lg: 'w-3 h-3'
-  };
+  const currentConfig = sizeConfig[size];
 
   return (
     <div className="flex flex-col items-center gap-2 select-none group">
       <div 
         ref={knobRef}
         onMouseDown={handleMouseDown}
-        className={`${sizeClasses[size]} relative rounded-full bg-gradient-to-br from-neutral-200 to-neutral-400 shadow-[4px_4px_8px_rgba(0,0,0,0.4),-2px_-2px_4px_rgba(255,255,255,0.9)] cursor-ns-resize flex items-center justify-center border border-neutral-300 ring-1 ring-neutral-400/50 active:scale-95 transition-transform`}
+        className={`${currentConfig.size} relative rounded-full bg-white border-4 border-black neo-shadow-sm cursor-ns-resize flex items-center justify-center transition-transform active:scale-95`}
         style={{ transform: `rotate(${rotation}deg)` }}
-        title={`${label}: ${Math.round(value)}`}
       >
-        {/* Inner concentric circles for texture */}
-        <div className="absolute inset-1 rounded-full border border-neutral-300 opacity-50"></div>
-        <div className="absolute inset-3 rounded-full border border-neutral-300 opacity-40"></div>
-        
-        {/* Indicator Line/Dot */}
-        <div className="absolute top-2 w-1.5 h-1/2 origin-bottom flex flex-col items-center justify-start">
-             <div className={`w-1.5 h-4 bg-orange-600 rounded-full shadow-[0_0_2px_rgba(234,88,12,0.8)]`}></div>
+        {/* Decorative center screw */}
+        <div className="absolute w-4 h-4 rounded-full border-2 border-black bg-neutral-300 z-10 flex items-center justify-center">
+             <div className="w-full h-0.5 bg-black rotate-45"></div>
+        </div>
+
+        {/* Indicator Line */}
+        <div className="absolute top-0 w-2 h-1/2 origin-bottom flex flex-col items-center justify-start py-1">
+             <div className={`w-full ${currentConfig.indicator} bg-black`}></div>
         </div>
       </div>
-      <span className="text-xs font-bold uppercase tracking-widest text-neutral-600 font-[Orbitron]">{label}</span>
+      <span className="text-sm font-black uppercase tracking-widest bg-black text-white px-2 py-0.5 -rotate-2">{label}</span>
     </div>
   );
 };
