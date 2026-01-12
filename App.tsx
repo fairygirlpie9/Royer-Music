@@ -18,6 +18,7 @@ const App: React.FC = () => {
   const [poweredOn, setPoweredOn] = useState(true);
   const [error, setError] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [autoPlay, setAutoPlay] = useState<boolean>(false);
   
   // Refs for audio handling
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -140,8 +141,8 @@ const App: React.FC = () => {
     const handlePause = () => setIsPlaying(false);
     const handleEnded = () => {
       setIsPlaying(false);
-      // Auto-advance
-      if (currentTrackIndex < tracks.length - 1) {
+      // Auto-advance only if autoplay is on
+      if (autoPlay && currentTrackIndex < tracks.length - 1) {
           playTrack(currentTrackIndex + 1);
       }
     };
@@ -176,7 +177,7 @@ const App: React.FC = () => {
       audio.removeEventListener('loadedmetadata', handleTimeUpdate);
       audio.removeEventListener('ratechange', handleRateChange);
     };
-  }, [tracks, currentTrackIndex, playbackRate]);
+  }, [tracks, currentTrackIndex, playbackRate, autoPlay]);
 
   // Controls
   const togglePlay = async () => {
@@ -389,7 +390,18 @@ const App: React.FC = () => {
         <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-6 bg-yellow-100">
             {/* Knobs Area */}
             <div className="relative md:col-span-1 bg-orange-300 border-4 border-black p-4 neo-shadow flex flex-col items-center justify-center gap-4">
-                {/* Reset Button - Moved to absolute position top right */}
+                
+                {/* Autoplay Button */}
+                <button 
+                    onClick={() => setAutoPlay(!autoPlay)}
+                    className={`absolute top-2 left-2 p-1.5 border-2 border-black transition-all neo-shadow-sm active:translate-y-[1px] active:shadow-none flex items-center gap-1 ${autoPlay ? 'bg-yellow-200' : 'bg-white'}`}
+                    title="Autoplay"
+                >
+                    <div className={`w-2 h-2 rounded-full border border-black ${autoPlay ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-neutral-400'}`} />
+                    <span className="text-[10px] font-bold">AUTO</span>
+                </button>
+
+                {/* Reset Button */}
                 <button 
                     onClick={handleResetControls}
                     className="absolute top-2 right-2 p-1.5 bg-white border-2 border-black hover:bg-red-400 hover:text-white transition-all neo-shadow-sm active:translate-y-[1px] active:shadow-none"
