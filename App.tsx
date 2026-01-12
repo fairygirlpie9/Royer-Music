@@ -4,7 +4,7 @@ import { Track } from './types';
 import Knob from './components/Knob';
 import Display from './components/Display';
 import Playlist from './components/Playlist';
-import { Play, Pause, SkipBack, SkipForward, Upload, Power, Zap, RotateCcw } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Mail, Power, Zap, RotateCcw } from 'lucide-react';
 
 const App: React.FC = () => {
   // State
@@ -16,6 +16,8 @@ const App: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [poweredOn, setPoweredOn] = useState(true);
+  const [error, setError] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   
   // Refs for audio handling
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -24,6 +26,79 @@ const App: React.FC = () => {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   
+  // Fetch Tracks from GitHub
+  useEffect(() => {
+    const fetchGitHubTracks = async () => {
+        setIsLoading(true);
+        try {
+            // 1. Get repo info to find default branch
+            const repoResponse = await fetch('https://api.github.com/repos/fairygirlpie9/all-my-music');
+            if (!repoResponse.ok) throw new Error('Failed to fetch repo info');
+            const repoData = await repoResponse.json();
+            const defaultBranch = repoData.default_branch || 'main';
+
+            // 2. Try to fetch songs.json
+            let metadata: Record<string, { title?: string, genre?: string }> = {};
+            try {
+                const metaUrl = `https://raw.githubusercontent.com/fairygirlpie9/all-my-music/${defaultBranch}/songs.json`;
+                const metaResponse = await fetch(metaUrl);
+                if (metaResponse.ok) {
+                    metadata = await metaResponse.json();
+                }
+            } catch (e) {
+                console.log("Metadata load skipped or invalid:", e);
+            }
+
+            // 3. Fetch recursive tree to get ALL files in subfolders
+            const treeResponse = await fetch(`https://api.github.com/repos/fairygirlpie9/all-my-music/git/trees/${defaultBranch}?recursive=1`);
+            if (!treeResponse.ok) throw new Error('Failed to fetch repo tree');
+            const treeData = await treeResponse.json();
+            
+            // 4. Filter and map tracks
+            const audioExtensions = ['.mp3', '.wav', '.ogg', '.m4a', '.aac'];
+            const repoTracks: Track[] = treeData.tree
+                .filter((item: any) => item.type === 'blob' && audioExtensions.some(ext => item.path.toLowerCase().endsWith(ext)))
+                .map((item: any) => {
+                    const fileName = item.path.split('/').pop();
+                    
+                    // Lookup metadata by full path (preferred) or just filename
+                    const meta = metadata[item.path] || metadata[fileName];
+                    
+                    // Use metadata title or fallback to cleaned filename
+                    const title = meta?.title 
+                        ? meta.title.toUpperCase() 
+                        : fileName.replace(/\.[^/.]+$/, "").replace(/_/g, " ").toUpperCase();
+                    
+                    // Use metadata genre or fallback
+                    const artist = meta?.genre 
+                        ? meta.genre.toUpperCase() 
+                        : 'GITHUB REPO';
+
+                    // Safely construct URL for nested paths
+                    const pathEncoded = item.path.split('/').map((s: string) => encodeURIComponent(s)).join('/');
+                    const rawUrl = `https://raw.githubusercontent.com/fairygirlpie9/all-my-music/${defaultBranch}/${pathEncoded}`;
+
+                    return {
+                        id: item.sha,
+                        title: title,
+                        artist: artist, // Mapped to 'artist' field for display logic
+                        url: rawUrl
+                    };
+                });
+
+            if (repoTracks.length > 0) {
+                setTracks(repoTracks);
+            }
+        } catch (err) {
+            console.error("Error loading tracks:", err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    fetchGitHubTracks();
+  }, []);
+
   // Initialize Audio Context
   const initAudioContext = useCallback(() => {
     if (audioContextRef.current) return;
@@ -107,6 +182,14 @@ const App: React.FC = () => {
   const togglePlay = async () => {
     if (!poweredOn) return;
     if (!audioRef.current) return;
+    if (tracks.length === 0) return;
+    
+    if (error) {
+        // Retry logic if in error state
+        if (audioRef.current.error) {
+           audioRef.current.load();
+        }
+    }
     
     if (!audioContextRef.current) {
         initAudioContext();
@@ -121,6 +204,7 @@ const App: React.FC = () => {
       if (!audioRef.current.src && !tracks[currentTrackIndex]) return;
       try {
         await audioRef.current.play();
+        setError(false);
       } catch (e) {
         console.error("Playback failed:", e);
       }
@@ -131,6 +215,7 @@ const App: React.FC = () => {
     if (!poweredOn) return;
     if (index < 0 || index >= tracks.length) return;
     setCurrentTrackIndex(index);
+    setError(false);
   };
 
   // Handle Track Changes
@@ -147,16 +232,25 @@ const App: React.FC = () => {
             
             // CRITICAL: Re-apply playback rate immediately after loading new source
             audio.playbackRate = playbackRate;
+            setError(false);
             
             if (isPlaying && poweredOn) {
-                audio.play().catch(e => console.log("Auto-play prevented", e));
+                audio.play().catch(e => {
+                    console.log("Auto-play prevented or failed", e);
+                });
             }
         }
     } else {
         audio.removeAttribute('src');
         audio.load();
     }
-  }, [currentTrackIndex, tracks, poweredOn]); // We read playbackRate from closure or state if needed, but specifically setting it on load is key.
+  }, [currentTrackIndex, tracks, poweredOn]);
+
+  const handleAudioError = () => {
+      console.error("Audio Load Error");
+      setIsPlaying(false);
+      setError(true);
+  };
 
   const handleVolumeChange = (newVol: number) => {
     setVolume(newVol);
@@ -179,23 +273,6 @@ const App: React.FC = () => {
   const handleResetControls = () => {
       handleVolumeChange(70);
       handleTuneChange(50); // Maps to 1.0 playback rate
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
-
-    const newTracks: Track[] = Array.from(files).map((file: File) => ({
-      id: crypto.randomUUID(),
-      // Replace underscores with spaces and remove extension
-      title: file.name.replace(/\.[^/.]+$/, "").replace(/_/g, " ").toUpperCase(),
-      artist: 'UPLOAD', 
-      url: URL.createObjectURL(file),
-      file: file
-    }));
-
-    setTracks(prev => [...prev, ...newTracks]);
-    if (tracks.length === 0 && newTracks.length > 0) setCurrentTrackIndex(0);
   };
 
   const handleRemoveTrack = (index: number) => {
@@ -235,7 +312,12 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-2 sm:p-4 bg-pink-400 pattern-dots font-['Space_Mono']">
-      <audio ref={audioRef} crossOrigin="anonymous" preload="metadata" />
+      <audio 
+        ref={audioRef} 
+        crossOrigin="anonymous" 
+        preload="metadata" 
+        onError={handleAudioError}
+      />
 
       {/* Main Container - The "Deck" */}
       <div className={`relative w-full max-w-4xl bg-yellow-100 border-4 border-black neo-shadow-lg transition-all duration-300 ${poweredOn ? '' : 'grayscale brightness-90'}`}>
@@ -276,6 +358,8 @@ const App: React.FC = () => {
                     duration={duration}
                     analyser={analyserRef.current}
                     isPlaying={isPlaying}
+                    error={error}
+                    isLoading={isLoading}
                 />
              </div>
         </div>
@@ -295,10 +379,9 @@ const App: React.FC = () => {
                     <SkipForward size={24} className="sm:w-8 sm:h-8" strokeWidth={2.5} />
                 </button>
 
-                <label className={`${btnClass} flex-1 cursor-pointer bg-white`}>
-                     <input type="file" multiple accept="audio/*" onChange={handleFileUpload} className="hidden" />
-                     <Upload size={24} className="sm:w-8 sm:h-8" strokeWidth={2.5} />
-                </label>
+                <a href="mailto:danielle.royer@hotmail.com" className={`${btnClass} flex-1`} aria-label="Contact">
+                     <Mail size={24} className="sm:w-8 sm:h-8" strokeWidth={2.5} />
+                </a>
             </div>
         </div>
 
