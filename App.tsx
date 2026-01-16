@@ -4,7 +4,7 @@ import { Track } from './types';
 import Knob from './components/Knob';
 import Display from './components/Display';
 import Playlist from './components/Playlist';
-import { Play, Pause, SkipBack, SkipForward, Mail, Power, Zap, RotateCcw } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Mail, Power, Zap, RotateCcw, Repeat } from 'lucide-react';
 
 const App: React.FC = () => {
   // State
@@ -18,7 +18,8 @@ const App: React.FC = () => {
   const [poweredOn, setPoweredOn] = useState(true);
   const [error, setError] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [autoPlay, setAutoPlay] = useState<boolean>(false);
+  // Default AutoPlay to TRUE per user request
+  const [autoPlay, setAutoPlay] = useState<boolean>(true);
   
   // Refs for audio handling
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -50,7 +51,7 @@ const App: React.FC = () => {
                 console.log("Metadata load skipped or invalid:", e);
             }
 
-            // 3. Fetch recursive tree to get ALL files in subfolders
+            // 3. Fetch recursive tree to get ALL files in subfolders (Unlimited up to 100k files)
             const treeResponse = await fetch(`https://api.github.com/repos/fairygirlpie9/all-my-music/git/trees/${defaultBranch}?recursive=1`);
             if (!treeResponse.ok) throw new Error('Failed to fetch repo tree');
             const treeData = await treeResponse.json();
@@ -367,17 +368,29 @@ const App: React.FC = () => {
 
         {/* Transport Bar */}
         <div className="bg-[#C084FC] border-b-4 border-black p-4">
-            <div className="flex gap-4 justify-between">
-                <button className={`${btnClass} flex-1`} onClick={() => playTrack(currentTrackIndex - 1)}>
+            <div className="flex gap-3 md:gap-4 justify-between">
+                <button className={`${btnClass} flex-1`} onClick={() => playTrack(currentTrackIndex - 1)} title="Previous">
                     <SkipBack size={24} className="sm:w-8 sm:h-8" strokeWidth={2.5} />
                 </button>
                 
-                <button className={`${btnClass} flex-[2]`} onClick={togglePlay}>
+                <button className={`${btnClass} flex-[2]`} onClick={togglePlay} title="Play/Pause">
                     {isPlaying ? <Pause size={24} className="sm:w-8 sm:h-8" strokeWidth={2.5} fill="black" /> : <Play size={24} className="sm:w-8 sm:h-8" strokeWidth={2.5} fill="black" />}
                 </button>
                 
-                <button className={`${btnClass} flex-1`} onClick={() => playTrack(currentTrackIndex + 1)}>
+                <button className={`${btnClass} flex-1`} onClick={() => playTrack(currentTrackIndex + 1)} title="Next">
                     <SkipForward size={24} className="sm:w-8 sm:h-8" strokeWidth={2.5} />
+                </button>
+
+                {/* New Prominent Auto Button */}
+                <button 
+                    onClick={() => setAutoPlay(!autoPlay)}
+                    className={`${btnClass} flex-1 flex flex-col items-center justify-center gap-0.5 md:gap-1 transition-all
+                        ${autoPlay ? 'bg-green-400' : 'bg-white'}
+                    `}
+                    title="Auto Play"
+                >
+                     <Repeat size={18} strokeWidth={3} className={`transition-all ${autoPlay ? 'rotate-180' : 'text-neutral-400'}`} />
+                     <span className={`text-[9px] md:text-[10px] font-bold leading-none ${autoPlay ? 'text-black' : 'text-neutral-400'}`}>AUTO</span>
                 </button>
 
                 <a href="mailto:danielle.royer@hotmail.com" className={`${btnClass} flex-1`} aria-label="Contact">
@@ -391,16 +404,6 @@ const App: React.FC = () => {
             {/* Knobs Area */}
             <div className="relative md:col-span-1 bg-orange-300 border-4 border-black p-4 neo-shadow flex flex-col items-center justify-center gap-4">
                 
-                {/* Autoplay Button */}
-                <button 
-                    onClick={() => setAutoPlay(!autoPlay)}
-                    className={`absolute top-2 left-2 p-1.5 border-2 border-black transition-all neo-shadow-sm active:translate-y-[1px] active:shadow-none flex items-center gap-1 ${autoPlay ? 'bg-yellow-200' : 'bg-white'}`}
-                    title="Autoplay"
-                >
-                    <div className={`w-2 h-2 rounded-full border border-black ${autoPlay ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-neutral-400'}`} />
-                    <span className="text-[10px] font-bold">AUTO</span>
-                </button>
-
                 {/* Reset Button */}
                 <button 
                     onClick={handleResetControls}
@@ -417,7 +420,8 @@ const App: React.FC = () => {
             {/* Playlist Area */}
             <div className="md:col-span-2 bg-white border-4 border-black p-0 neo-shadow h-56 md:h-64 flex flex-col">
                 <div className="bg-black text-white p-2 font-bold text-center border-b-4 border-black font-['Archivo_Black'] tracking-widest text-lg">
-                    TRACK LIST
+                    {/* Show explicit track count to confirm unlimited loading */}
+                    TRACK LIST <span className="text-pink-500">//</span> {tracks.length}
                 </div>
                 <div className="flex-1 overflow-hidden">
                     <Playlist 

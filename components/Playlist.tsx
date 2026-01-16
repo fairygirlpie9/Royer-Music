@@ -1,6 +1,6 @@
 import React from 'react';
 import { Track } from '../types';
-import { Music, Trash2, ArrowRight } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 
 interface PlaylistProps {
   tracks: Track[];
@@ -16,7 +16,7 @@ const formatTitle = (title: string) => {
 
 const Playlist: React.FC<PlaylistProps> = ({ tracks, currentTrackId, isPlaying, onSelect, onRemove }) => {
   return (
-    <div className="bg-white h-72 overflow-y-auto p-4">
+    <div className="bg-white h-full overflow-y-auto p-4 scroll-smooth">
       {tracks.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full text-neutral-400 font-bold border-2 border-dashed border-neutral-300">
              <span>NO_DATA</span>
